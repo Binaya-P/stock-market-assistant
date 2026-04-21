@@ -1,8 +1,7 @@
-from data_loader import load_data
-from signals import smart_signal
+from analysis.data_loader import load_all_data
+from analysis.signal_engine_v2 import calculate_signals
 
-df = load_data("data/floor.csv")
+df = load_all_data("data/")
+signals = calculate_signals(df)
 
-result = smart_signal(df)
-
-print(result.head(10))
+print(signals.head(10))
