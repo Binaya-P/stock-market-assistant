@@ -205,3 +205,26 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+
+# --- NepseAI specific ---
+
+# Data storage (DO NOT push)
+data/raw/
+data/processed/
+data/*.csv
+
+# Reports output
+reports/
+
+# Logs
+*.log
+
+# Local configs (future)
+config.local.json
+
+
+docs/Lib/
+docs/Include/
+docs/Scripts/
