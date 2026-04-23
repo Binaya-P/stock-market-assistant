@@ -1,7 +1,7 @@
 from analysis.data_loader import load_all_data
-from analysis.signal_engine_v2 import calculate_signals
+from analysis.signals import generate_signals
 
-df = load_all_data("data/")
-signals = calculate_signals(df)
+df = load_all_data("data/raw/")
+signals = generate_signals(df)
 
-print(signals.head(20))
+print(signals.head(5))

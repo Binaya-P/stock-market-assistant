@@ -1,130 +1,110 @@
-# Analysis Engine (Main Laptop)
+# Analysis Engine (Signal Engine v2)
 
-## 🎯 Purpose
-This device is responsible for **analysis, decision-making, and strategy execution**.
+## Overview
+The Analysis Engine processes cleaned NEPSE floor sheet data and generates trading signals based on:
 
-It consumes cleaned data from the data server and generates trading insights.
+- Volume
+- Trade activity
+- Large trade participation
+- Liquidity
 
----
-
-## 🧠 Responsibilities
-
-### 1. Data Consumption
-- Read from:
-  - clean daily data
-  - weekly / monthly summaries
-  - signal reports
+It does NOT execute trades. It only provides ranked opportunities.
 
 ---
 
-### 2. Signal Analysis
+## Core Metrics
 
-Uses:
-- volume spikes
-- price behavior
-- large trade activity
-- trend strength
+### 1. Volume
+Total traded quantity per stock.
 
-Outputs:
-- ranked stocks
-- confidence score (%)
-- signal type (BUY / WATCH / AVOID)
+### 2. Trades (Activity)
+Number of transactions per stock.
 
----
+### 3. Average Price
+Mean traded price.
 
-### 3. Strategy Execution (Manual for now)
-
-- Select top candidates (3–5 stocks)
-- Allocate capital based on confidence %
-- Decide entry timing (mid-day preferred)
+### 4. Large Trade Ratio
+Measures smart money presence:
+large trades / total volume
 
 ---
 
-### 4. Entry Strategy
+## Normalization
 
-- 30% → before breakout
-- 60% → at breakout
-- 10% → after confirmation
+To compare across stocks:
 
----
-
-### 5. Exit Strategy
-
-- -5% → warning
-- -8% → reduce position
-- -10% → full exit
+- volume_norm = volume / max(volume)
+- activity_norm = trades / max(trades)
 
 ---
 
-### 6. Profit Strategy
+## Confidence Score
 
-(To be refined)
+Balanced scoring:
 
-Options:
-- partial profit booking
-- signal-based exit
-- fixed % targets
+confidence =  
+(large_trade_ratio * 0.4) +  
+(volume_norm * 0.3) +  
+(activity_norm * 0.3)
 
----
-
-### 7. Risk Management
-
-- Max 3–5 active positions
-- Weighted capital allocation
-- Avoid overexposure
+Scaled to 0–100.
 
 ---
 
-### 8. Re-entry Logic
+## Liquidity Score
 
-- Allowed only if:
-  - signal appears again
-  - conditions improve
-
----
-
-## 🧠 Market Assumptions
-
-Based on Nepal Stock Exchange (NEPSE):
-
-- semi-efficient market
-- influenced by manipulation
-- sector-based movement
-- slower trade settlement (T+2)
+liquidity_score =  
+(volume_norm * 0.6) +  
+(activity_norm * 0.4)
 
 ---
 
-## ⚙️ Workflow
+## Final Score
 
-1. Load latest data
-2. Run signal engine
-3. Rank stocks
-4. Apply filters
-5. Generate actionable list
+final_score =  
+(confidence * 0.7) +  
+(liquidity_score * 0.3)
 
 ---
 
-## 📊 Output Example
+## Filtering Rules
 
-stock | confidence | signal
-------|------------|--------
-ABC   | 78%        | BUY
-XYZ   | 74%        | WATCH
+To remove noise:
 
----
-
-## ❌ What This Device Does NOT Do
-
-- No data collection
-- No raw data storage
-- No background scheduling
+- volume > 50,000
+- trades > 200
 
 ---
 
-## 🚀 Future Upgrades
+## Signal Classification
 
-- Entry timing engine
-- Exit timing optimization
-- AI-based pattern detection
-- News integration
-- Portfolio tracking system
+Static thresholds (current version):
+
+- confidence >= 45 → ACCUMULATION
+- confidence >= 35 → WATCH
+- else → IGNORE
+
+---
+
+## Interpretation
+
+- ACCUMULATION → strong candidate (possible BUY)
+- WATCH → monitor / wishlist
+- IGNORE → discard
+
+---
+
+## Notes
+
+- System is **market-relative but not fully adaptive yet**
+- Designed for **liquidity-first filtering**
+- Avoids illiquid trap stocks
+
+---
+
+## Future Improvements
+
+- Market mode detection (bull/bear)
+- Multi-timeframe signals
+- Momentum + trend integration
+- Volatility adjustment

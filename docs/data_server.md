@@ -1,118 +1,101 @@
-# Data Server (Old Laptop)
+# Data Server / Data Pipeline
 
-## 🎯 Purpose
-This device acts as a **data engine** for the system.  
-It collects, cleans, aggregates, and stores stock market data from the Nepal Stock Exchange (NEPSE).
+## Overview
 
-It must remain **stable and low-maintenance**.
+Handles data collection, storage, and preparation for analysis.
 
 ---
 
-## 🧠 Responsibilities
-
-### 1. Data Collection
-- Run once daily after market close (~3:30–4:00 PM)
-- Fetch full floorsheet data from NEPSE API
-- Save raw data temporarily
-
----
-
-### 2. Data Cleaning
-- Remove duplicates using `contractId`
-- Validate and standardize:
-  - `stockSymbol`
-  - `contractQuantity`
-  - `contractRate`
-  - `tradeTime`
-- Remove invalid or missing rows
-
----
-
-### 3. Data Storage
-
-#### Folder Structure
+## Current Structure
 
 data/
-├── raw/
-├── clean/
-│   ├── YYYY-MM-DD.csv
-├── weekly/
-│   ├── YYYY-Wxx.csv
-├── monthly/
-│   ├── YYYY-MM.csv
-├── yearly/
-│   ├── YYYY.csv
+│
+├── raw/        # raw NEPSE API data (optional)
+├── summary/    # cleaned & usable data (PRIMARY SOURCE)
+├── state/      # persistent system state (portfolio)
+│   └── portfolio.csv
 
 ---
 
-### 4. Data Retention Policy
+## Data Flow
 
-- Raw data → delete after **14 days**
-- Clean data → keep **permanently**
-- Aggregated data → keep **permanently**
+NEPSE API → Collector → CSV → Analysis Engine
 
 ---
 
-### 5. Aggregation
+## Raw Data Collection
 
-#### Daily (after cleaning)
-For each stock:
-- total volume
-- total trades
-- average price
-- high / low price
-- closing price
-- price change %
+Using nepse API:
 
----
+- endpoint: floor sheet
+- collected manually or via script
 
-#### Weekly
-- Combine last 5 trading days
+Saved as:
 
-#### Monthly
-- Combine all trading days in month
-
-#### Yearly
-- Combine all months
+data/raw/floor_YYYYMMDD_HHMMSS.csv
 
 ---
 
-### 6. Signal Generation (Daily)
+## Current Decision
 
-- Run signal engine after cleaning
-- Output:
+Raw data is already mostly clean → we skip heavy cleaning.
 
-reports/
-├── YYYY-MM-DD_signals.csv
-
----
-
-## ⚙️ Execution
-
-- Runs automatically via scheduler (cron / task scheduler)
-- No manual interaction required
+👉 System will move toward:
+- using **summary/** as main input
+- avoiding duplication of raw + cleaned
 
 ---
 
-## ❌ What This Device Does NOT Do
+## Summary Data (Planned)
 
-- No heavy analysis
-- No model training
-- No experimentation
-- No manual trading decisions
+Will contain:
 
----
+- daily aggregated data
+- cleaned + normalized structure
 
-## 🧠 Design Philosophy
-
-- Stability > complexity
-- Consistency > speed
-- Automation > manual control
+Used directly by signal engine.
 
 ---
 
-## 🚀 Future Upgrades
+## State Management
 
-- Move from CSV → SQLite
-- Add mid-day snapshot collection
-- Improve aggregation logic
+portfolio.csv stores:
+
+- symbol
+- quantity
+- avg_price (WACC)
+- confidence
+- last_updated
+
+---
+
+## Missing (To Build)
+
+- Data validation layer
+- Deduplication
+- Error handling for API failures
+- Scheduled collection system
+
+---
+
+## Future Roadmap
+
+### Time-based aggregation:
+
+- Daily summary
+- Weekly summary
+- Monthly summary
+- Yearly summary
+
+### Automation:
+
+- scheduled collector (cron / scheduler)
+- auto git sync (optional)
+
+---
+
+## Key Principle
+
+Data integrity first → signals later
+
+(Currently fixing this gap)

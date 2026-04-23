@@ -1,0 +1,14 @@
+pandas==2.2.2
+numpy==1.26.4
+
+# File handling & parsing
+python-dateutil==2.9.0
+
+# Data validation (VERY important)
+pydantic==2.7.1
+
+# Logging / debugging
+loguru==0.7.2
+
+# Optional but useful
+tqdm==4.66.4

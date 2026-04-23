@@ -13,15 +13,11 @@ def fetch_data():
         data = nepse.getFloorSheet()
         df = pd.DataFrame(data)
 
-        # Create timestamp (with seconds to avoid overwrite)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        df["timestamp"] = timestamp
-
         # Ensure data folder exists
         os.makedirs("data", exist_ok=True)
 
         # Save file
-        filename = f"data/floor_{timestamp}.csv"
+        filename = f"data/raw/floor_{timestamp}.csv"
         df.to_csv(filename, index=False)
 
         print(f"[✔] Saved: {filename}")
@@ -34,3 +30,7 @@ def fetch_data():
 
     except Exception as e:
         print("[ERROR] Fetch failed:", e)
+
+
+if __name__ == "__main__":
+    fetch_data()

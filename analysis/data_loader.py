@@ -1,20 +1,16 @@
 import pandas as pd
 import os
 
-def load_all_data(folder_path):
-    all_files = []
 
-    for file in os.listdir(folder_path):
-        if file.endswith(".csv"):
-            file_path = os.path.join(folder_path, file)
-            df = pd.read_csv(file_path)
-            df = df.drop_duplicates(subset="contractId")
-            all_files.append(df)
+def load_all_data(folder_path="data/raw/"):
+    all_files = [
+        os.path.join(folder_path, f)
+        for f in os.listdir(folder_path)
+        if f.endswith(".csv")
+    ]
 
-    if not all_files:
-        print("No CSV files found!")
-        return pd.DataFrame()
+    df_list = [pd.read_csv(file) for file in all_files]
 
-    combined_df = pd.concat(all_files, ignore_index=True)
+    combined = pd.concat(df_list, ignore_index=True)
 
-    return combined_df
+    return combined
