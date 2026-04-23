@@ -1,7 +1,5 @@
-from analysis.data_loader import load_all_data
-from analysis.signals import generate_signals
+from run_close import main
 
-df = load_all_data("data/raw/")
-signals = generate_signals(df)
 
-print(signals.head(5))
+if __name__ == "__main__":
+    main()

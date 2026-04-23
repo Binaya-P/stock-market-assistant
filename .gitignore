@@ -138,6 +138,7 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.venv312/
 env/
 venv/
 ENV/
@@ -213,7 +214,11 @@ __marimo__/
 # Data storage (DO NOT push)
 data/raw/
 data/processed/
+data/summary/
 data/*.csv
+data/state/*.db
+data/state/*.sqlite
+data/state/*.sqlite3
 
 # Reports output
 reports/

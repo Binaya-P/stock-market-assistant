@@ -1,82 +1,246 @@
+from pathlib import Path
+from typing import Optional
+
 import pandas as pd
 
-
-def large_trade_ratio(df, threshold=1000):
-    def calc(group):
-        total = group["contractQuantity"].sum()
-        large = group[group["contractQuantity"] > threshold]["contractQuantity"].sum()
-        return large / total if total != 0 else 0
-
-    return df.groupby("stockSymbol").apply(calc)
+from analysis.dataset_builder import build_daily_summary_from_raw
 
 
-def avg_price(df):
-    return df.groupby("stockSymbol")["contractRate"].mean()
+SIGNAL_COLUMNS = [
+    "period_type",
+    "period_key",
+    "stock",
+    "avg_price",
+    "volume",
+    "trades",
+    "liquidity_score",
+    "quality_score",
+    "momentum_score",
+    "persistence_score",
+    "close_strength",
+    "intraday_return",
+    "confidence",
+    "final_score",
+    "rank",
+    "system_signal",
+]
+
+SUMMARY_REQUIRED_COLUMNS = {
+    "period_type",
+    "period_key",
+    "stockSymbol",
+    "avg_price",
+    "total_volume",
+    "total_trades",
+    "open_price",
+    "close_price",
+    "high_price",
+    "low_price",
+    "avg_confidence",
+    "avg_final_score",
+    "positive_signal_days",
+    "breakout_days",
+    "accumulation_days",
+    "trading_days",
+}
 
 
-def repeat_activity(df):
-    return df.groupby("stockSymbol")["contractId"].count()
+def _normalize(series: pd.Series) -> pd.Series:
+    if series.empty:
+        return pd.Series(dtype=float)
+
+    min_value = series.min()
+    max_value = series.max()
+
+    if pd.isna(min_value) or pd.isna(max_value) or max_value <= min_value:
+        return pd.Series(0.5, index=series.index)
+
+    return (series - min_value) / (max_value - min_value)
 
 
-def generate_signals(df):
-    volume = df.groupby("stockSymbol")["contractQuantity"].sum()
-    trades = df.groupby("stockSymbol")["contractId"].count()
-    price = avg_price(df)
-    large_ratio = large_trade_ratio(df)
-    activity = repeat_activity(df)
+def _rank_percentile(series: pd.Series) -> pd.Series:
+    if series.empty:
+        return pd.Series(dtype=float)
 
-    result = pd.DataFrame({
-        "stock": volume.index,
-        "volume": volume.values,
-        "trades": trades.values,
-        "avg_price": price.values,
-        "large_trade_ratio": large_ratio.values,
-        "activity": activity.values
-    })
+    ranked = series.rank(method="average", pct=True)
+    return ranked.fillna(0.0)
 
-    # Normalize
-    result["volume_norm"] = result["volume"] / result["volume"].max()
-    result["activity_norm"] = result["activity"] / result["activity"].max()
 
-    # Confidence (YOUR 60/40 idea)
-    result["confidence"] = (
-        (result["large_trade_ratio"] * 0.4) +
-        (result["volume_norm"] * 0.3) +
-        (result["activity_norm"] * 0.3)
+def _is_summary_frame(df: pd.DataFrame) -> bool:
+    return SUMMARY_REQUIRED_COLUMNS.issubset(df.columns)
+
+
+def _prepare_summary_source(df: pd.DataFrame, period_key: Optional[str] = None) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=SIGNAL_COLUMNS)
+
+    if _is_summary_frame(df):
+        summary_df = df.copy()
+    else:
+        summary_df = build_daily_summary_from_raw(df)
+
+    if summary_df.empty:
+        return pd.DataFrame(columns=SIGNAL_COLUMNS)
+
+    summary_df = summary_df.copy()
+    summary_df["period_start"] = pd.to_datetime(summary_df["period_start"], errors="coerce")
+
+    if period_key is None:
+        latest_period_start = summary_df["period_start"].max()
+        summary_df = summary_df[summary_df["period_start"] == latest_period_start].copy()
+    else:
+        summary_df = summary_df[summary_df["period_key"].astype(str) == str(period_key)].copy()
+
+    return summary_df.reset_index(drop=True)
+
+
+def _classify_signal(row: pd.Series, breakout_rank_limit: int, accumulation_rank_limit: int, watch_rank_limit: int) -> str:
+    if (
+        row["final_score"] >= 78
+        and row["rank"] <= breakout_rank_limit
+        and row["close_strength"] >= 0.68
+        and row["intraday_return"] >= 0
+        and row["liquidity_score"] >= 60
+    ):
+        return "BREAKOUT"
+
+    if (
+        row["final_score"] >= 62
+        and row["rank"] <= accumulation_rank_limit
+        and row["quality_score"] >= 55
+    ):
+        return "ACCUMULATION"
+
+    if (
+        row["final_score"] >= 50
+        and row["rank"] <= watch_rank_limit
+    ):
+        return "WATCH"
+
+    return "IGNORE"
+
+
+def generate_signals(
+    df: pd.DataFrame,
+    min_volume: int = 20000,
+    min_trades: int = 100,
+    period_key: Optional[str] = None,
+) -> pd.DataFrame:
+    summary_df = _prepare_summary_source(df, period_key=period_key)
+
+    if summary_df.empty:
+        return pd.DataFrame(columns=SIGNAL_COLUMNS)
+
+    working = summary_df.copy()
+    working = working[
+        (pd.to_numeric(working["total_volume"], errors="coerce").fillna(0) >= min_volume)
+        & (pd.to_numeric(working["total_trades"], errors="coerce").fillna(0) >= min_trades)
+    ].copy()
+
+    if working.empty:
+        return pd.DataFrame(columns=SIGNAL_COLUMNS)
+
+    working["intraday_return"] = (
+        (working["close_price"] - working["open_price"])
+        / working["open_price"].replace(0, pd.NA)
+    ).fillna(0.0)
+    price_span = (working["high_price"] - working["low_price"]).clip(lower=0)
+    working["close_strength"] = (
+        (working["close_price"] - working["low_price"])
+        / price_span.replace(0, pd.NA)
+    ).clip(lower=0, upper=1).fillna(0.5)
+    working["range_pct"] = (
+        price_span / working["avg_price"].replace(0, pd.NA)
+    ).fillna(0.0)
+
+    positive_signal_ratio = (
+        working["positive_signal_days"] / working["trading_days"].replace(0, pd.NA)
+    ).fillna(0.0)
+    breakout_ratio = (
+        working["breakout_days"] / working["trading_days"].replace(0, pd.NA)
+    ).fillna(0.0)
+    accumulation_ratio = (
+        working["accumulation_days"] / working["trading_days"].replace(0, pd.NA)
+    ).fillna(0.0)
+
+    volume_rank = _rank_percentile(working["total_volume"])
+    trade_rank = _rank_percentile(working["total_trades"])
+    turnover_rank = _rank_percentile(working["total_turnover"])
+    confidence_rank = _rank_percentile(working["avg_confidence"])
+    final_rank = _rank_percentile(working["avg_final_score"])
+    return_rank = _rank_percentile(working["intraday_return"].clip(lower=-0.15, upper=0.15))
+    range_rank = _rank_percentile(working["range_pct"])
+
+    working["liquidity_score"] = (
+        volume_rank * 0.6 + trade_rank * 0.4
     ) * 100
 
+    working["quality_score"] = (
+        final_rank * 0.45 + confidence_rank * 0.35 + turnover_rank * 0.20
+    ) * 100
 
-    result = result[
-        (result["volume"] > 50000) & 
-        (result["trades"] > 200)
-    ]
+    working["momentum_score"] = (
+        working["close_strength"] * 0.45 + return_rank * 0.35 + range_rank * 0.20
+    ) * 100
 
-    result["liquidity_score"] = (
-        result["volume_norm"] * 0.6 +
-        result["activity_norm"] * 0.4
+    working["persistence_score"] = (
+        positive_signal_ratio * 0.5 + breakout_ratio * 0.3 + accumulation_ratio * 0.2
+    ) * 100
+
+    working["confidence"] = (
+        working["quality_score"] * 0.5
+        + working["momentum_score"] * 0.3
+        + working["persistence_score"] * 0.2
     )
 
-
-    # Final score (hybrid)
-    result["final_score"] =result["final_score"] = (
-        result["confidence"] * 0.7 +
-        result["liquidity_score"] * 0.3
+    working["final_score"] = (
+        working["liquidity_score"] * 0.35
+        + working["quality_score"] * 0.30
+        + working["momentum_score"] * 0.20
+        + working["persistence_score"] * 0.15
     )
 
-    # Signal classification
-    def classify_signal(row):
-        if row["confidence"] > 75 and row["activity_norm"] > 0.2:
-            return "BREAKOUT"
-        elif row["confidence"] > 45:
-            return "ACCUMULATION"
-        elif row["confidence"] > 35:
-            return "WATCH"
-        else:
-            return "IGNORE"
+    working = working.sort_values(
+        by=["final_score", "quality_score", "liquidity_score"],
+        ascending=[False, False, False],
+    ).reset_index(drop=True)
+    working["rank"] = working.index + 1
 
-    result["system_signal"] = result.apply(classify_signal, axis=1)
+    total_rows = len(working)
+    breakout_rank_limit = max(3, int(total_rows * 0.05))
+    accumulation_rank_limit = max(10, int(total_rows * 0.22))
+    watch_rank_limit = max(25, int(total_rows * 0.45))
 
-    # Filter noise
-    result = result[result["volume"] > 5000]
+    working["system_signal"] = working.apply(
+        _classify_signal,
+        axis=1,
+        breakout_rank_limit=breakout_rank_limit,
+        accumulation_rank_limit=accumulation_rank_limit,
+        watch_rank_limit=watch_rank_limit,
+    )
 
-    return result.sort_values(by="confidence", ascending=False)
+    result = pd.DataFrame(
+        {
+            "period_type": working["period_type"],
+            "period_key": working["period_key"],
+            "stock": working["stockSymbol"],
+            "avg_price": working["avg_price"].round(2),
+            "volume": working["total_volume"],
+            "trades": working["total_trades"],
+            "liquidity_score": working["liquidity_score"].round(2),
+            "quality_score": working["quality_score"].round(2),
+            "momentum_score": working["momentum_score"].round(2),
+            "persistence_score": working["persistence_score"].round(2),
+            "close_strength": working["close_strength"].round(4),
+            "intraday_return": working["intraday_return"].round(4),
+            "confidence": working["confidence"].round(2),
+            "final_score": working["final_score"].round(2),
+            "rank": working["rank"],
+            "system_signal": working["system_signal"],
+        }
+    )
+
+    return result.sort_values(
+        by=["final_score", "confidence", "volume"],
+        ascending=[False, False, False],
+    ).reset_index(drop=True)

@@ -1,36 +1,43 @@
-import pandas as pd
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+import pandas as pd
 from nepse import Nepse
-import os
-
-nepse = Nepse()
-nepse.setTLSVerification(False)
 
 
-def fetch_data():
+RAW_DATA_DIR = Path("data/raw")
+SNAPSHOT_ID_FORMAT = "%Y%m%d_%H%M%S"
+
+
+def _build_client() -> Nepse:
+    client = Nepse()
+    client.setTLSVerification(False)
+    return client
+
+
+def fetch_data(client: Optional[Nepse] = None) -> Optional[Path]:
+    client = client or _build_client()
+    collection_time = datetime.now().astimezone()
+    snapshot_id = collection_time.strftime(SNAPSHOT_ID_FORMAT)
+
     try:
-        # Fetch data from NEPSE
-        data = nepse.getFloorSheet()
+        data = client.getFloorSheet()
         df = pd.DataFrame(data)
 
-        # Ensure data folder exists
-        os.makedirs("data", exist_ok=True)
+        if df.empty:
+            raise ValueError("NEPSE returned no floor sheet rows.")
 
-        # Save file
-        filename = f"data/raw/floor_{timestamp}.csv"
+        df["collectionTime"] = collection_time.isoformat(timespec="seconds")
+        df["snapshotId"] = snapshot_id
+
+        RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        filename = RAW_DATA_DIR / f"floor_{snapshot_id}.csv"
         df.to_csv(filename, index=False)
 
-        print(f"[✔] Saved: {filename}")
+        print(f"[OK] Saved {len(df)} rows to {filename}")
+        return filename
 
-        # 🔥 OPTIONAL: Auto Git sync (enable later for old laptop)
-        # Comment these during testing if annoying
-        os.system("git add data/")
-        os.system(f'git commit -m "data {timestamp}"')
-        os.system("git push")
-
-    except Exception as e:
-        print("[ERROR] Fetch failed:", e)
-
-
-if __name__ == "__main__":
-    fetch_data()
+    except Exception as exc:
+        print(f"[ERROR] Fetch failed: {exc}")
+        return None
