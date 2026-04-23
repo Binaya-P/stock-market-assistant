@@ -4,8 +4,8 @@ from typing import Optional
 
 import pandas as pd
 
-
 PORTFOLIO_FILE = Path("data/state/portfolio.csv")
+
 PORTFOLIO_COLUMNS = [
     "symbol",
     "quantity",
@@ -17,16 +17,19 @@ PORTFOLIO_COLUMNS = [
 ]
 
 
+# -------------------------------
+# INTERNAL HELPERS
+# -------------------------------
 def _empty_portfolio() -> pd.DataFrame:
     return pd.DataFrame(columns=PORTFOLIO_COLUMNS)
 
 
-def _ensure_state_dir() -> None:
+def _ensure_state_dir():
     PORTFOLIO_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _align_portfolio_schema(df: pd.DataFrame) -> pd.DataFrame:
-    aligned = df.copy()
+def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
 
     defaults = {
         "symbol": "",
@@ -38,69 +41,70 @@ def _align_portfolio_schema(df: pd.DataFrame) -> pd.DataFrame:
         "last_updated": "",
     }
 
-    for column, default_value in defaults.items():
-        if column not in aligned.columns:
-            aligned[column] = default_value
+    for col, val in defaults.items():
+        if col not in df.columns:
+            df[col] = val
 
-    aligned = aligned[PORTFOLIO_COLUMNS]
+    df = df[PORTFOLIO_COLUMNS]
 
-    aligned["symbol"] = aligned["symbol"].astype(str).str.strip().str.upper()
+    df["symbol"] = df["symbol"].astype(str).str.upper().str.strip()
 
-    for column in ["quantity", "avg_price", "current_price", "confidence"]:
-        aligned[column] = pd.to_numeric(aligned[column], errors="coerce").fillna(0.0)
+    for col in ["quantity", "avg_price", "current_price", "confidence"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-    aligned["signal_type"] = aligned["signal_type"].astype(str).str.strip().str.upper()
-    aligned["last_updated"] = aligned["last_updated"].astype(str)
+    df["signal_type"] = df["signal_type"].astype(str).str.upper()
+    df["last_updated"] = df["last_updated"].astype(str)
 
-    return aligned
+    return df
 
 
+# -------------------------------
+# CORE FUNCTIONS
+# -------------------------------
 def load_portfolio() -> pd.DataFrame:
     if not PORTFOLIO_FILE.exists():
         return _empty_portfolio()
 
-    portfolio = pd.read_csv(PORTFOLIO_FILE)
-    return _align_portfolio_schema(portfolio)
+    df = pd.read_csv(PORTFOLIO_FILE)
+    return _align_schema(df)
 
 
-def save_portfolio(df: pd.DataFrame) -> None:
+def save_portfolio(df: pd.DataFrame):
     _ensure_state_dir()
-    _align_portfolio_schema(df).to_csv(PORTFOLIO_FILE, index=False)
+    _align_schema(df).to_csv(PORTFOLIO_FILE, index=False)
 
 
-def add_position(
-    symbol: str,
-    quantity: float,
-    price: float,
-    confidence: float,
-    signal_type: str = "ACCUMULATION",
-) -> None:
-    portfolio = load_portfolio()
-    symbol = symbol.strip().upper()
-    timestamp = datetime.now().isoformat(sep=" ", timespec="seconds")
+# -------------------------------
+# POSITION MANAGEMENT
+# -------------------------------
+def add_position(symbol, quantity, price, confidence, signal_type="ACCUMULATION"):
+    df = load_portfolio()
+    symbol = symbol.upper().strip()
+    now = datetime.now().isoformat(sep=" ", timespec="seconds")
 
-    existing = portfolio["symbol"] == symbol
+    existing = df["symbol"] == symbol
 
     if existing.any():
-        row_index = portfolio.index[existing][0]
-        current_quantity = float(portfolio.at[row_index, "quantity"])
-        current_avg_price = float(portfolio.at[row_index, "avg_price"])
-        new_quantity = current_quantity + quantity
+        idx = df.index[existing][0]
 
-        if new_quantity <= 0:
+        old_qty = df.at[idx, "quantity"]
+        old_price = df.at[idx, "avg_price"]
+
+        new_qty = old_qty + quantity
+
+        if new_qty <= 0:
             remove_position(symbol)
             return
 
-        weighted_avg_price = (
-            (current_quantity * current_avg_price) + (quantity * price)
-        ) / new_quantity
+        new_avg = ((old_qty * old_price) + (quantity * price)) / new_qty
 
-        portfolio.at[row_index, "quantity"] = new_quantity
-        portfolio.at[row_index, "avg_price"] = round(weighted_avg_price, 2)
-        portfolio.at[row_index, "current_price"] = price
-        portfolio.at[row_index, "confidence"] = confidence
-        portfolio.at[row_index, "signal_type"] = signal_type
-        portfolio.at[row_index, "last_updated"] = timestamp
+        df.at[idx, "quantity"] = new_qty
+        df.at[idx, "avg_price"] = round(new_avg, 2)
+        df.at[idx, "current_price"] = price
+        df.at[idx, "confidence"] = confidence
+        df.at[idx, "signal_type"] = signal_type
+        df.at[idx, "last_updated"] = now
+
     else:
         new_row = {
             "symbol": symbol,
@@ -109,48 +113,74 @@ def add_position(
             "current_price": price,
             "confidence": confidence,
             "signal_type": signal_type,
-            "last_updated": timestamp,
+            "last_updated": now,
         }
-        portfolio = pd.concat([portfolio, pd.DataFrame([new_row])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    save_portfolio(portfolio)
+    save_portfolio(df)
 
 
-def update_position(
-    symbol: str,
-    price: Optional[float] = None,
-    confidence: Optional[float] = None,
-    signal_type: Optional[str] = None,
-) -> None:
-    portfolio = load_portfolio()
-    symbol = symbol.strip().upper()
-    existing = portfolio["symbol"] == symbol
+def update_position(symbol, price=None, confidence=None, signal_type=None):
+    df = load_portfolio()
+    symbol = symbol.upper().strip()
 
+    existing = df["symbol"] == symbol
     if not existing.any():
         return
 
-    row_index = portfolio.index[existing][0]
+    idx = df.index[existing][0]
 
     if price is not None:
-        portfolio.at[row_index, "current_price"] = price
-    if confidence is not None:
-        portfolio.at[row_index, "confidence"] = confidence
-    if signal_type is not None:
-        portfolio.at[row_index, "signal_type"] = signal_type
+        df.at[idx, "current_price"] = price
 
-    portfolio.at[row_index, "last_updated"] = datetime.now().isoformat(
+    if confidence is not None:
+        df.at[idx, "confidence"] = confidence
+
+    if signal_type is not None:
+        df.at[idx, "signal_type"] = signal_type
+
+    df.at[idx, "last_updated"] = datetime.now().isoformat(
         sep=" ", timespec="seconds"
     )
 
-    save_portfolio(portfolio)
+    save_portfolio(df)
 
 
-def update_confidence(symbol: str, confidence: float) -> None:
-    update_position(symbol, confidence=confidence)
+def remove_position(symbol):
+    df = load_portfolio()
+    symbol = symbol.upper().strip()
+    df = df[df["symbol"] != symbol]
+    save_portfolio(df)
 
 
-def remove_position(symbol: str) -> None:
-    portfolio = load_portfolio()
-    symbol = symbol.strip().upper()
-    portfolio = portfolio[portfolio["symbol"] != symbol]
-    save_portfolio(portfolio)
+# -------------------------------
+# FUTURE: CAPITAL ALLOCATION
+# -------------------------------
+def allocate_capital(signals_df, total_capital=100):
+    buy_df = signals_df[
+        signals_df["system_signal"].isin(["ACCUMULATION", "BREAKOUT"])
+    ]
+
+    if buy_df.empty:
+        return []
+
+    deployable = total_capital * 0.75
+    total_conf = buy_df["confidence"].sum()
+
+    allocations = []
+
+    for _, row in buy_df.iterrows():
+        weight = row["confidence"] / total_conf
+        allocation = weight * deployable
+
+        allocation = min(allocation, total_capital * 0.20)
+
+        allocations.append(
+            {
+                "symbol": row["stock"],
+                "allocation_percent": round(allocation, 2),
+                "confidence": row["confidence"],
+            }
+        )
+
+    return allocations

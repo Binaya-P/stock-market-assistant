@@ -1,77 +1,138 @@
 import pandas as pd
+from pathlib import Path
+from datetime import datetime
 
-from portfolio.portfolio_manager import (
-    add_position,
-    load_portfolio,
-    remove_position,
-    update_position,
-)
+from portfolio.portfolio_manager import load_portfolio
 
-
+# -------------------------------
+# CONFIG
+# -------------------------------
 CONFIDENCE_ADD_THRESHOLD = 15
 CONFIDENCE_EXIT_THRESHOLD = 20
 
-REQUIRED_SIGNAL_COLUMNS = {"stock", "confidence", "system_signal", "avg_price"}
+MIN_CONFIDENCE_BUY = 70
+MIN_FINAL_SCORE_BUY = 75
+
+REQUIRED_SIGNAL_COLUMNS = {
+    "stock",
+    "confidence",
+    "system_signal",
+    "avg_price",
+    "final_score",
+}
+
+WISHLIST_FILE = Path("data/state/wishlist.csv")
 
 
+# -------------------------------
+# WISHLIST
+# -------------------------------
+def load_wishlist():
+    if not WISHLIST_FILE.exists():
+        return pd.DataFrame(columns=["symbol", "confidence", "signal", "price", "added_at"])
+    return pd.read_csv(WISHLIST_FILE)
+
+
+def save_wishlist(df):
+    WISHLIST_FILE.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(WISHLIST_FILE, index=False)
+
+
+def add_to_wishlist(symbol, confidence, signal, price):
+    df = load_wishlist()
+    symbol = symbol.upper().strip()
+
+    if symbol in df["symbol"].values:
+        return
+
+    new_row = {
+        "symbol": symbol,
+        "confidence": confidence,
+        "signal": signal,
+        "price": price,
+        "added_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    save_wishlist(df)
+
+
+# -------------------------------
+# MAIN ENGINE (NO EXECUTION)
+# -------------------------------
 def process_signals(signal_df: pd.DataFrame) -> pd.DataFrame:
     if signal_df.empty:
-        print("[INFO] No signals matched the configured filters.")
+        print("[INFO] No signals available.")
         return pd.DataFrame(columns=["symbol", "action", "confidence", "signal"])
 
     missing = REQUIRED_SIGNAL_COLUMNS.difference(signal_df.columns)
     if missing:
-        missing_list = ", ".join(sorted(missing))
-        raise ValueError(f"Signal dataframe is missing required columns: {missing_list}")
+        raise ValueError(f"Missing required columns: {', '.join(missing)}")
 
     portfolio = load_portfolio()
-    actions: list[dict[str, object]] = []
+    actions = []
 
     for _, row in signal_df.iterrows():
         symbol = str(row["stock"]).strip().upper()
         confidence = float(row["confidence"])
         signal = str(row["system_signal"]).strip().upper()
         price = float(row["avg_price"])
+        final_score = float(row["final_score"])
 
         existing = portfolio[portfolio["symbol"] == symbol]
 
+        # -------------------------------
+        # NOT IN PORTFOLIO → WISHLIST
+        # -------------------------------
         if existing.empty:
             if signal in {"ACCUMULATION", "BREAKOUT"}:
-                print(f"NEW BUY: {symbol}")
-                add_position(
-                    symbol=symbol,
-                    quantity=10,
-                    price=price,
-                    confidence=confidence,
-                    signal_type=signal,
-                )
-                action = "BUY"
+
+                if confidence >= 75:
+                    tier = "STRONG"
+                elif confidence >= 60:
+                    tier = "SPECULATIVE"
+                else:
+                    tier = None
+
+                if tier:
+                    print(f"WISHLIST ({tier}): {symbol}")
+
+                    add_to_wishlist(
+                        symbol=symbol,
+                        confidence=confidence,
+                        signal=f"{signal}_{tier}",
+                        price=price,
+                    )
+
+                    action = f"WISHLIST_{tier}"
+                else:
+                    action = "SKIP"
             else:
                 action = "SKIP"
 
+        # -------------------------------
+        # IN PORTFOLIO → SUGGESTIONS ONLY
+        # -------------------------------
         else:
-            old_confidence = float(existing.iloc[0]["confidence"])
+            old_conf = float(existing.iloc[0]["confidence"])
 
-            if signal == "IGNORE" or old_confidence - confidence >= CONFIDENCE_EXIT_THRESHOLD:
-                print(f"EXIT: {symbol}")
-                remove_position(symbol)
+            # ❌ EXIT SUGGESTION
+            if signal == "IGNORE" or (old_conf - confidence >= CONFIDENCE_EXIT_THRESHOLD):
+                print(f"SUGGEST EXIT: {symbol}")
                 action = "EXIT"
-            elif confidence - old_confidence >= CONFIDENCE_ADD_THRESHOLD:
-                print(f"UPGRADE: {symbol}")
-                update_position(
-                    symbol,
-                    price=price,
-                    confidence=confidence,
-                    signal_type=signal,
-                )
-                action = "UPGRADE"
+
+            # ⚠️ WEAK SIGNAL
+            elif confidence < 50:
+                print(f"SUGGEST REDUCE: {symbol}")
+                action = "REDUCE"
+
+            # 🔼 UPGRADE SUGGESTION
+            elif confidence - old_conf >= CONFIDENCE_ADD_THRESHOLD:
+                print(f"SUGGEST ADD: {symbol}")
+                action = "ADD"
+
+            # 🔄 HOLD
             else:
-                update_position(
-                    symbol,
-                    price=price,
-                    confidence=confidence,
-                    signal_type=signal,
-                )
                 action = "HOLD"
 
         actions.append(
@@ -82,6 +143,5 @@ def process_signals(signal_df: pd.DataFrame) -> pd.DataFrame:
                 "signal": signal,
             }
         )
-        portfolio = load_portfolio()
 
     return pd.DataFrame(actions)

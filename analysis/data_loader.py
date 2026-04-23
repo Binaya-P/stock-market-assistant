@@ -117,7 +117,8 @@ def _parse_snapshot_id(snapshot_id: Optional[str]) -> Optional[datetime]:
 
 def _normalize_collection_time(series: pd.Series) -> pd.Series:
     values = series.astype(str).str.strip()
-    parsed = pd.to_datetime(values, errors="coerce")
+
+    parsed = pd.to_datetime(values, errors="coerce", utc=True)
 
     needs_snapshot_parse = parsed.isna() & values.ne("") & values.ne("None")
     if needs_snapshot_parse.any():
@@ -125,7 +126,11 @@ def _normalize_collection_time(series: pd.Series) -> pd.Series:
             values.loc[needs_snapshot_parse],
             format=SNAPSHOT_ID_FORMAT,
             errors="coerce",
+            utc=True
         )
+
+    # 🔥 CRITICAL FIX: make everything tz-naive (consistent)
+    parsed = parsed.dt.tz_localize(None)
 
     return parsed
 
@@ -144,7 +149,7 @@ def _prepare_frame(df: pd.DataFrame, source_file: Path) -> pd.DataFrame:
         if column in cleaned.columns:
             cleaned[column] = pd.to_numeric(cleaned[column], errors="coerce")
 
-    cleaned["tradeTime"] = pd.to_datetime(cleaned["tradeTime"], errors="coerce")
+    cleaned["tradeTime"] = pd.to_datetime(cleaned["tradeTime"], errors="coerce", utc=True).dt.tz_localize(None)
 
     if "businessDate" in cleaned.columns:
         cleaned["businessDate"] = pd.to_datetime(

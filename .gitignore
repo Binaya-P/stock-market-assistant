@@ -212,6 +212,7 @@ __marimo__/
 # --- NepseAI specific ---
 
 # Data storage (DO NOT push)
+data/state/portfolio.csv
 data/raw/
 data/processed/
 data/summary/
@@ -233,3 +234,5 @@ config.local.json
 docs/Lib/
 docs/Include/
 docs/Scripts/
+
+git+https://github.com/basic-bgnr/NepseUnofficialApi

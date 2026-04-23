@@ -143,7 +143,7 @@ Changes:
 - Added weekly, fortnightly, monthly, and yearly rollups
 - Added Friday evening summary scheduling
 - Set deduplication to use `contractId` across overlapping snapshots
-- Confirmed the working project runtime on Python `3.12`
+- Confirmed Python 3.12 runtime
 
 Goal:
 - Make summary data the stable input for future signal-engine upgrades
@@ -153,103 +153,152 @@ Goal:
 ## Phase 13 - Summary Validation Iteration
 
 Iteration 1:
-- added raw dataset reporting with deduplication totals
-- expanded snapshot indexing with retained versus dropped rows
-- added summary health reporting by timeframe
-- added validation issue reporting for summary anomalies
+- Added raw dataset reporting with deduplication totals
+- Expanded snapshot indexing with retained vs dropped rows
+- Added summary health reporting
+- Added validation issue reporting
 
 Outcome:
-- the summary pipeline now explains what it built and where data quality problems appear
+- Pipeline now explains data quality and anomalies
 
 ---
 
-## Phase 14 - SQLite Canonical Store Iteration
+## Phase 14 - SQLite Canonical Store
 
 Iteration 2:
-- added `data/state/nepseai.db` as the canonical local store
-- synced deduplicated raw contracts into SQLite
-- synced snapshot index, summary tables, health reports, and validation issues into SQLite
-- updated the summary rebuild path so CSV exports and SQLite stay aligned
-- added a lightweight SQLite audit entry point for quick verification
+- Added `data/state/nepseai.db`
+- Synced raw, summaries, and reports into SQLite
+- Aligned CSV exports with SQLite
+- Added SQLite audit tool
 
 Outcome:
-- the project now has a stable queryable store for collection and summarization work
+- Stable queryable data layer
 
 ---
 
 ## Phase 15 - Reconciliation Iteration
 
 Iteration 3:
-- added duplicate contract reconciliation reporting
-- exported retained versus dropped duplicate contract details to CSV
-- synced duplicate contract reconciliation data into SQLite
+- Added duplicate contract reconciliation
+- Exported retained vs dropped contracts
+- Synced to SQLite
 
 Outcome:
-- the summary pipeline can now explain deduplication decisions instead of only reporting totals
+- Deduplication is now explainable
 
 ---
 
-## Phase 16 - Validation And Metadata Iteration
+## Phase 16 - Validation + Metadata
 
 Iteration 4:
-- added stricter summary validation for duplicate keys and invalid time windows
-- added SQLite pipeline metadata for schema tracking and safer recovery
-- improved SQLite audit output to show the active database path
+- Added stricter validation rules
+- Added SQLite metadata tracking
+- Improved audit visibility
 
 Outcome:
-- the summary system is easier to verify and safer to recover if pipeline behavior changes later
+- Safer and more maintainable pipeline
 
 ---
 
-## Phase 17 - Scheduler And Archive Iteration
+## Phase 17 - Scheduler + Automation
 
 Iteration 5:
-- moved raw fetch scheduling to `1:00 PM` and `3:30 PM` on trading days
-- synced SQLite after each scheduled raw fetch
-- added staged summary jobs for daily, weekly, fortnightly, monthly, and yearly updates
-- added date-stamped archived summary snapshots for scheduled summary runs
-- made scheduler jobs restart-safe through persisted SQLite job-run tracking
+- Raw fetch at 1:00 PM and 3:30 PM
+- Auto SQLite sync after fetch
+- Scheduled summary jobs (daily → yearly)
+- Archive snapshots with timestamps
+- Restart-safe scheduler using job tracking
 
 Outcome:
-- collection, summarization, archival, and scheduling now follow a much more operational workflow
+- Fully operational data pipeline
+
+---
+
+## Phase 18 - Signal + Decision System Upgrade (Today)
+
+Major Changes:
+
+### 1. Decision System Redesign
+- Removed automatic trading behavior
+- Portfolio is now **user-controlled only**
+- System no longer forces BUY into portfolio
+
+### 2. Wishlist System Introduced
+- Created `wishlist.csv`
+- System BUY signals go to wishlist instead of portfolio
+- Portfolio = real trades
+- Wishlist = system predictions
+
+### 3. Hybrid Trading Model
+- Two independent layers:
+  - **User Portfolio (manual control)**
+  - **System Wishlist (auto simulation)**
+
+### 4. Virtual Capital Engine (Planned Behavior)
+- Wishlist gets virtual capital = **500,000**
+- Keeps **5% cash reserve**
+- Uses **confidence-weighted allocation**
+- Max cap per position enforced
+
+### 5. Virtual Trading Rules
+- BUY from signals
+- SELL based on:
+  - Confidence drop
+  - Signal downgrade (`IGNORE`)
+- Enforce **T+3 settlement rule**
+  - Cash locked after sell
+  - Released after T+3 days
+
+### 6. System Performance Tracking
+- Wishlist acts as:
+  - Backtesting layer (forward testing)
+  - Strategy evaluator
+- Enables comparison:
+  - System vs User decisions
 
 ---
 
 ## Current Direction
 
-- keep iterating on summary quality and validation depth
-- use SQLite as the stable foundation for later analytics
-- re-enter signal-engine work on top of stronger summary data
+- Separate system intelligence from user execution
+- Use wishlist as AI trading simulation
+- Keep portfolio human-controlled
+- Improve confidence-driven allocation
 
 ---
 
 ## Next Phases
 
-### Phase 18
-- Market mode detection
-- Stronger signal-engine redesign
-
 ### Phase 19
-- Advanced summary scoring and reconciliation tooling
-- SQLite-backed analytics helpers
+- Implement full wishlist engine (cash, trades, T+3)
+- Add wishlist PnL tracking
+- Add trade logs
 
 ### Phase 20
-- Backtesting system
+- Market regime detection (bull/bear/sideways)
+- Dynamic confidence adjustment
 
 ### Phase 21
-- Performance tracking across daily, weekly, monthly, and yearly views
+- Backtesting engine using historical summaries
+- Strategy comparison framework
+
+### Phase 22
+- Performance dashboards (daily/weekly/monthly/yearly)
+- Portfolio vs wishlist benchmarking
 
 ---
 
 ## Key Lessons Learned
 
-- Raw signals are not the same as tradable signals
-- Liquidity matters more than isolated big trades
-- Signal logic, decisions, and execution should stay separated
-- Clean data structures make later strategy work easier
+- Raw signals ≠ tradable signals
+- Liquidity > hype trades
+- Separation of concerns is critical:
+  - Signals ≠ Decisions ≠ Execution
+- Data quality directly impacts strategy quality
+- System should suggest, not force trades
 
 ---
 
 ## Philosophy
 
-"Detect opportunity -> evaluate risk -> allocate capital"
+"Detect opportunity -> evaluate risk -> simulate -> then deploy capital"
