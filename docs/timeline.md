@@ -125,13 +125,13 @@ Fixes:
 ## Phase 11 - Raw Data Model Cleanup
 
 Changes:
-- Separated `tradeTime` from collection metadata
-- Introduced `collectionTime` and `snapshotId`
-- Added raw snapshot audit support
+- Separated `tradeTime` from system metadata
+- Introduced `collectionTime`
+- Prepared snapshot tracking capability
 
 Reason:
 - Preserve exchange event time cleanly
-- Prepare better inputs for later aggregation
+- Prepare better inputs for aggregation and signals
 
 ---
 
@@ -142,8 +142,8 @@ Changes:
 - Built daily stock-level summaries from raw floor-sheet data
 - Added weekly, fortnightly, monthly, and yearly rollups
 - Added Friday evening summary scheduling
-- Set deduplication to use `contractId` across overlapping snapshots
-- Confirmed Python 3.12 runtime
+- Set deduplication to use `contractId`
+- Confirmed Python `3.12` runtime stability
 
 Goal:
 - Make summary data the stable input for future signal-engine upgrades
@@ -152,153 +152,198 @@ Goal:
 
 ## Phase 13 - Summary Validation Iteration
 
-Iteration 1:
-- Added raw dataset reporting with deduplication totals
-- Expanded snapshot indexing with retained vs dropped rows
+- Added raw dataset reporting
+- Added deduplication tracking
 - Added summary health reporting
-- Added validation issue reporting
+- Added validation issue detection
 
 Outcome:
-- Pipeline now explains data quality and anomalies
+- Pipeline explains data quality and anomalies
 
 ---
 
-## Phase 14 - SQLite Canonical Store
+## Phase 14 - SQLite Canonical Store Iteration
 
-Iteration 2:
 - Added `data/state/nepseai.db`
-- Synced raw, summaries, and reports into SQLite
+- Synced raw data, summaries, and reports to SQLite
 - Aligned CSV exports with SQLite
-- Added SQLite audit tool
+- Added audit entry point
 
 Outcome:
-- Stable queryable data layer
+- Stable, queryable data foundation
 
 ---
 
 ## Phase 15 - Reconciliation Iteration
 
-Iteration 3:
-- Added duplicate contract reconciliation
-- Exported retained vs dropped contracts
-- Synced to SQLite
+- Added duplicate contract reconciliation reporting
+- Exported retained vs dropped duplicates
+- Synced reconciliation data to SQLite
 
 Outcome:
-- Deduplication is now explainable
+- Deduplication is now explainable, not just applied
 
 ---
 
-## Phase 16 - Validation + Metadata
+## Phase 16 - Validation And Metadata Iteration
 
-Iteration 4:
 - Added stricter validation rules
 - Added SQLite metadata tracking
 - Improved audit visibility
 
 Outcome:
-- Safer and more maintainable pipeline
+- Safer pipeline with easier recovery
 
 ---
 
-## Phase 17 - Scheduler + Automation
+## Phase 17 - Scheduler And Archive Iteration
 
-Iteration 5:
-- Raw fetch at 1:00 PM and 3:30 PM
-- Auto SQLite sync after fetch
-- Scheduled summary jobs (daily → yearly)
-- Archive snapshots with timestamps
-- Restart-safe scheduler using job tracking
+- Scheduled raw fetch at fixed trading intervals
+- Synced SQLite after each run
+- Added staged summary jobs
+- Added archive snapshots
+- Made scheduler restart-safe
 
 Outcome:
 - Fully operational data pipeline
 
 ---
 
-## Phase 18 - Signal + Decision System Upgrade (Today)
+## Phase 18 - Collector Intelligence Upgrade (TODAY)
 
-Major Changes:
+Major upgrades:
 
-### 1. Decision System Redesign
-- Removed automatic trading behavior
+### Market-Aware Collection
+- Integrated NEPSE `isNepseOpen()` API
+- Added fallback trading window (10:00–15:00)
+- Added buffer handling for delayed API responses
+
+### Data Integrity Improvements
+- Enforced `contractId` deduplication at ingestion
+- Prevented duplicate accumulation across snapshots
+- Added corruption-safe CSV handling
+
+### Metadata Enhancements
+- Added `collectionTime` per snapshot
+- Prepared system for `snapshotId` tracking
+
+### Frequency Change
+- Shifted from sparse collection to **hourly collection**
+- Ensures near-complete trade capture while maintaining efficiency
+
+---
+
+## Phase 19 - Decision Engine Redesign (TODAY)
+
+Major shift in philosophy:
+
+### Portfolio Decoupling
+- Removed automatic portfolio trading
 - Portfolio is now **user-controlled only**
-- System no longer forces BUY into portfolio
 
-### 2. Wishlist System Introduced
+### Suggestion-Based System
+- Introduced:
+  - `ADD`
+  - `REDUCE`
+  - `EXIT`
+  - `HOLD`
+
+### Confidence-Based Decisions
+- Removed "top N" logic
+- Replaced with dynamic confidence thresholds
+
+---
+
+## Phase 20 - Wishlist System Introduction (TODAY)
+
+New subsystem:
+
+### Wishlist Engine
 - Created `wishlist.csv`
-- System BUY signals go to wishlist instead of portfolio
-- Portfolio = real trades
-- Wishlist = system predictions
+- Separated from real portfolio
 
-### 3. Hybrid Trading Model
-- Two independent layers:
-  - **User Portfolio (manual control)**
-  - **System Wishlist (auto simulation)**
+### Signal Classification
+- `WISHLIST_STRONG`
+- `WISHLIST_SPECULATIVE`
 
-### 4. Virtual Capital Engine (Planned Behavior)
-- Wishlist gets virtual capital = **500,000**
-- Keeps **5% cash reserve**
-- Uses **confidence-weighted allocation**
-- Max cap per position enforced
+### Purpose
+- Capture high-potential signals without risking real capital
+- Track system intelligence independently
 
-### 5. Virtual Trading Rules
-- BUY from signals
-- SELL based on:
-  - Confidence drop
-  - Signal downgrade (`IGNORE`)
-- Enforce **T+3 settlement rule**
-  - Cash locked after sell
-  - Released after T+3 days
+---
 
-### 6. System Performance Tracking
-- Wishlist acts as:
-  - Backtesting layer (forward testing)
-  - Strategy evaluator
-- Enables comparison:
-  - System vs User decisions
+## Phase 21 - Hybrid Trading Architecture (TODAY)
+
+Defined system structure:
+
+### Dual System Design
+1. **User Portfolio**
+   - Manual control
+   - Real capital
+   - No auto-execution
+
+2. **System Wishlist Trader**
+   - Fully automated
+   - Virtual capital
+   - Performance tracking
+
+---
+
+## Phase 22 - Virtual Trading Engine Design (PLANNED)
+
+Rules defined:
+
+### Capital Model
+- Initial capital: 500,000
+- 5% cash reserve
+
+### Allocation Strategy
+- Confidence-weighted allocation
+- Max cap per position
+
+### Trading Rules
+- Only trade between 10:00–15:00
+- T+3 settlement rule enforced
+- Cash returned only after settlement
+
+### Purpose
+- Measure signal quality
+- Validate strategy before real capital deployment
 
 ---
 
 ## Current Direction
 
-- Separate system intelligence from user execution
-- Use wishlist as AI trading simulation
-- Keep portfolio human-controlled
-- Improve confidence-driven allocation
+- Build virtual trading engine on top of wishlist
+- Use performance data to refine signal engine
+- Improve summary quality and scoring
+- Strengthen analytics using SQLite
 
 ---
 
 ## Next Phases
 
-### Phase 19
-- Implement full wishlist engine (cash, trades, T+3)
-- Add wishlist PnL tracking
-- Add trade logs
+### Phase 23
+- Virtual trading engine implementation
 
-### Phase 20
-- Market regime detection (bull/bear/sideways)
-- Dynamic confidence adjustment
+### Phase 24
+- Backtesting framework
 
-### Phase 21
-- Backtesting engine using historical summaries
-- Strategy comparison framework
-
-### Phase 22
-- Performance dashboards (daily/weekly/monthly/yearly)
-- Portfolio vs wishlist benchmarking
+### Phase 25
+- Performance analytics (PnL, win rate, drawdown)
 
 ---
 
 ## Key Lessons Learned
 
 - Raw signals ≠ tradable signals
-- Liquidity > hype trades
-- Separation of concerns is critical:
-  - Signals ≠ Decisions ≠ Execution
-- Data quality directly impacts strategy quality
-- System should suggest, not force trades
+- Liquidity is critical
+- Data integrity is foundational
+- Signal, decision, and execution must remain separate
+- Systems should be testable without risking capital
 
 ---
 
 ## Philosophy
 
-"Detect opportunity -> evaluate risk -> simulate -> then deploy capital"
+"Detect opportunity → evaluate risk → simulate → deploy capital"
