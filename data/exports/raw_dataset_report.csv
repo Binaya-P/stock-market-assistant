@@ -1,0 +1,2 @@
+generated_at,source_folder,snapshot_count,raw_rows,deduplicated_rows,dropped_duplicate_rows,unique_contract_ids,duplicate_contract_ids,earliest_trade_time,latest_trade_time,earliest_collection_time,latest_collection_time,business_date_min,business_date_max
+2026-04-24T22:21:12,data,6,460422,386369,74053,386369,54275,2026-04-21 10:46:00.004802,2026-04-24 14:59:59.972380,2026-04-21 13:45:55,2026-04-24 16:22:04,2026-04-21,2026-04-24

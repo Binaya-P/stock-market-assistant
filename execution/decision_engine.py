@@ -53,7 +53,12 @@ def add_to_wishlist(symbol, confidence, signal, price):
         "added_at": datetime.now().isoformat(timespec="seconds"),
     }
 
-    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    new_df = pd.DataFrame([new_row])
+
+    if df.empty:
+        df = new_df
+    else:
+        df = pd.concat([df, new_df], ignore_index=True)
     save_wishlist(df)
 
 
