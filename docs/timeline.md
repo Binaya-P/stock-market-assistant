@@ -84,9 +84,13 @@ Created:
 - `portfolio_manager`
 - `data/state/portfolio.csv`
 
-Added initial tracked positions:
+Added tracked positions:
 - `JHAPA`
 - `MABEL`
+
+Key Rule:
+- Portfolio is **user-controlled only**
+- System cannot auto-update real holdings
 
 ---
 
@@ -96,254 +100,311 @@ Created:
 - `process_signals()`
 
 Logic:
-- New stock can become a buy candidate
-- Existing stock can be upgraded or exited
+- Suggest ADD, HOLD, REDUCE, EXIT
+- Separated system decision from execution
 
 ---
 
 ## Phase 9 - Data Pipeline Reframe
 
 Problem:
-- Raw and cleaned data responsibilities were unclear
-- Data loading was brittle
+- Raw vs processed data responsibilities unclear
 
 Decision:
-- Stabilize raw-data access first
-- Build a better summary layer before deeper signal upgrades
+- Stabilize raw-data layer first
+- Build summaries before upgrading signals
 
 ---
 
 ## Phase 10 - Collector Stabilization
 
 Fixes:
-- Ensured raw-data directories are created
-- Cleaned up collector save behavior
-- Removed risky auto-git actions from the collector path
+- Ensured raw-data directories exist
+- Cleaned collector save behavior
+- Removed risky auto-git actions
 
 ---
 
 ## Phase 11 - Raw Data Model Cleanup
 
 Changes:
-- Separated `tradeTime` from system metadata
-- Introduced `collectionTime`
-- Prepared snapshot tracking capability
+- Preserved `tradeTime` from exchange
+- Added `collectionTime`
+- Added `snapshotId`
 
-Reason:
-- Preserve exchange event time cleanly
-- Prepare better inputs for aggregation and signals
+Goal:
+- Clean audit trail of market data
 
 ---
 
 ## Phase 12 - Summary Pipeline Foundation
 
-Changes:
-- Defined shared summary files instead of per-stock files
-- Built daily stock-level summaries from raw floor-sheet data
-- Added weekly, fortnightly, monthly, and yearly rollups
-- Added Friday evening summary scheduling
-- Set deduplication to use `contractId`
-- Confirmed Python `3.12` runtime stability
+Built:
+- Shared summary files
+- Daily, weekly, monthly, yearly summaries
+- Friday scheduling
+- Deduplication via `contractId`
 
-Goal:
-- Make summary data the stable input for future signal-engine upgrades
+Confirmed runtime:
+- Python 3.12
 
 ---
 
 ## Phase 13 - Summary Validation Iteration
 
-- Added raw dataset reporting
-- Added deduplication tracking
-- Added summary health reporting
-- Added validation issue detection
-
-Outcome:
-- Pipeline explains data quality and anomalies
+Added:
+- Raw dataset reporting
+- Snapshot indexing
+- Summary health checks
+- Validation issue tracking
 
 ---
 
-## Phase 14 - SQLite Canonical Store Iteration
+## Phase 14 - SQLite Canonical Store
 
-- Added `data/state/nepseai.db`
-- Synced raw data, summaries, and reports to SQLite
-- Aligned CSV exports with SQLite
-- Added audit entry point
+Created:
+- `nepseai.db`
 
-Outcome:
-- Stable, queryable data foundation
+Synced:
+- Raw contracts
+- Summary tables
+- Health + validation reports
 
 ---
 
 ## Phase 15 - Reconciliation Iteration
 
-- Added duplicate contract reconciliation reporting
-- Exported retained vs dropped duplicates
-- Synced reconciliation data to SQLite
-
-Outcome:
-- Deduplication is now explainable, not just applied
+Added:
+- Duplicate contract tracking
+- CSV export of retained vs dropped trades
 
 ---
 
-## Phase 16 - Validation And Metadata Iteration
+## Phase 16 - Validation & Metadata
 
-- Added stricter validation rules
-- Added SQLite metadata tracking
-- Improved audit visibility
-
-Outcome:
-- Safer pipeline with easier recovery
+Added:
+- Stronger validation rules
+- SQLite metadata tracking
+- Safer schema handling
 
 ---
 
-## Phase 17 - Scheduler And Archive Iteration
+## Phase 17 - Scheduler & Archive
 
-- Scheduled raw fetch at fixed trading intervals
-- Synced SQLite after each run
-- Added staged summary jobs
-- Added archive snapshots
-- Made scheduler restart-safe
-
-Outcome:
-- Fully operational data pipeline
+Added:
+- Scheduled raw fetch (1:00 PM, 3:30 PM)
+- Summary rebuild pipeline
+- Archive snapshots
+- Restart-safe scheduler
 
 ---
 
-## Phase 18 - Collector Intelligence Upgrade (TODAY)
+## Phase 18 - Decision System Upgrade
 
-Major upgrades:
-
-### Market-Aware Collection
-- Integrated NEPSE `isNepseOpen()` API
-- Added fallback trading window (10:00–15:00)
-- Added buffer handling for delayed API responses
-
-### Data Integrity Improvements
-- Enforced `contractId` deduplication at ingestion
-- Prevented duplicate accumulation across snapshots
-- Added corruption-safe CSV handling
-
-### Metadata Enhancements
-- Added `collectionTime` per snapshot
-- Prepared system for `snapshotId` tracking
-
-### Frequency Change
-- Shifted from sparse collection to **hourly collection**
-- Ensures near-complete trade capture while maintaining efficiency
+Changes:
+- Removed "Top 5" selection
+- Introduced **confidence-driven decisions**
+- System now flags:
+  - ADD (strong conviction)
+  - WISHLIST (tracking candidates)
 
 ---
 
-## Phase 19 - Decision Engine Redesign (TODAY)
+## Phase 19 - Wishlist System
 
-Major shift in philosophy:
+Created:
+- `data/state/wishlist.csv`
 
-### Portfolio Decoupling
-- Removed automatic portfolio trading
-- Portfolio is now **user-controlled only**
+Features:
+- Stores system-discovered opportunities
+- Separate from portfolio
+- Tracks:
+  - confidence
+  - price
+  - signal type
+  - timestamps
 
-### Suggestion-Based System
-- Introduced:
-  - `ADD`
-  - `REDUCE`
-  - `EXIT`
-  - `HOLD`
-
-### Confidence-Based Decisions
-- Removed "top N" logic
-- Replaced with dynamic confidence thresholds
-
----
-
-## Phase 20 - Wishlist System Introduction (TODAY)
-
-New subsystem:
-
-### Wishlist Engine
-- Created `wishlist.csv`
-- Separated from real portfolio
-
-### Signal Classification
-- `WISHLIST_STRONG`
-- `WISHLIST_SPECULATIVE`
-
-### Purpose
-- Capture high-potential signals without risking real capital
-- Track system intelligence independently
+Types:
+- STRONG → high confidence
+- SPECULATIVE → lower confidence
 
 ---
 
-## Phase 21 - Hybrid Trading Architecture (TODAY)
+## Phase 20 - Hybrid Architecture Design
 
-Defined system structure:
+Defined system split:
 
-### Dual System Design
-1. **User Portfolio**
-   - Manual control
-   - Real capital
-   - No auto-execution
+### Old Device (Always Running)
+- Collector (hourly snapshots)
+- Virtual trader engine
+- Market-hour execution
 
-2. **System Wishlist Trader**
-   - Fully automated
-   - Virtual capital
-   - Performance tracking
+### New Device (User Controlled)
+- Signal generation
+- Decision engine
+- Portfolio tracking
+- Performance analysis
 
 ---
 
-## Phase 22 - Virtual Trading Engine Design (PLANNED)
+## Phase 21 - Market Awareness
 
-Rules defined:
+Added:
+- `isNepseOpen()` integration
+- Market-hour constraints (10 AM – 3 PM)
 
-### Capital Model
-- Initial capital: 500,000
-- 5% cash reserve
+Used for:
+- Virtual trader execution timing
+- Fair simulation vs real trading
 
-### Allocation Strategy
-- Confidence-weighted allocation
-- Max cap per position
+---
 
-### Trading Rules
-- Only trade between 10:00–15:00
-- T+3 settlement rule enforced
-- Cash returned only after settlement
+## Phase 22 - Virtual Trader Engine
 
-### Purpose
-- Measure signal quality
-- Validate strategy before real capital deployment
+Created:
+- Virtual trading system using wishlist
+
+Features:
+- Uses virtual capital (initial 500k)
+- Confidence-based position sizing
+- Cash reserve (5%)
+- T+3 settlement simulation
+- Buy/Sell logic based on target allocation
+
+Behavior:
+- Can reinvest profits
+- Avoids full capital deployment daily
+- Adjusts exposure based on confidence
+
+---
+
+## Phase 23 - Wishlist Trading Logic
+
+Rules:
+- Confidence → target allocation
+- Rebalancing instead of blind buying
+- Supports:
+  - adding positions
+  - reducing positions
+  - full exits
+
+No cooldown:
+- Allocation logic handles scaling naturally
+
+---
+
+## Phase 24 - Performance Tracking (Virtual Trader)
+
+Created:
+- `virtual_performance.json`
+
+Tracks:
+- equity curve
+- realized PnL
+- win/loss count
+- trade count
+- win rate
+
+Added:
+- trade log processing
+- snapshot throttling (no spam)
+- return % calculation
+
+---
+
+## Phase 25 - Portfolio Performance Tracking (User)
+
+Created:
+- `performance_history.csv`
+
+Tracks:
+- total invested
+- current value
+- pnl
+- return %
+- position count
+
+Integrated into:
+- `run_close.py`
+
+Runs:
+- every execution (independent of decisions)
+
+---
+
+## Phase 26 - System Synchronization
+
+Ensured:
+- Portfolio tracking always runs
+- Performance tracking independent of signals
+- No silent failures on empty outputs
+
+---
+
+## Phase 27 - Data Collection Upgrade
+
+Improvement:
+- Switched to **hourly snapshot collection**
+
+Reason:
+- TradeTime is accurate
+- Captures intraday behavior better
+- Improves signal quality
+
+---
+
+## Phase 28 - Scheduler + Live System Planning
+
+Planned:
+- `run_live_system.py` for old device
+
+Responsibilities:
+- Run collector hourly
+- Run virtual trader hourly
+- Respect market hours
+- Toggle system easily
 
 ---
 
 ## Current Direction
 
-- Build virtual trading engine on top of wishlist
-- Use performance data to refine signal engine
-- Improve summary quality and scoring
-- Strengthen analytics using SQLite
+- Evaluate signal quality using virtual trader
+- Compare:
+  - system performance vs real portfolio
+- Improve confidence scoring using real outcomes
+- Build analytics layer
 
 ---
 
 ## Next Phases
 
-### Phase 23
-- Virtual trading engine implementation
+### Phase 29
+- System vs Portfolio comparison engine
 
-### Phase 24
-- Backtesting framework
+### Phase 30
+- Equity curve visualization
 
-### Phase 25
-- Performance analytics (PnL, win rate, drawdown)
+### Phase 31
+- Drawdown and risk metrics
+
+### Phase 32
+- Backtesting system
+
+### Phase 33
+- Dashboard (local or web)
 
 ---
 
 ## Key Lessons Learned
 
-- Raw signals ≠ tradable signals
-- Liquidity is critical
-- Data integrity is foundational
-- Signal, decision, and execution must remain separate
-- Systems should be testable without risking capital
+- Signals ≠ decisions ≠ execution
+- Liquidity matters more than spikes
+- Confidence is better than ranking
+- Separation of concerns enables scalability
+- Data quality determines strategy quality
 
 ---
 
 ## Philosophy
 
-"Detect opportunity → evaluate risk → simulate → deploy capital"
+"Detect opportunity → evaluate confidence → simulate → validate → deploy"
