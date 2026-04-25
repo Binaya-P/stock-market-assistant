@@ -115,41 +115,14 @@ def add_position(symbol, quantity, price, confidence, signal_type="ACCUMULATION"
             "signal_type": signal_type,
             "last_updated": now,
         }
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    save_portfolio(df)
+        new_df = pd.DataFrame([new_row])
 
+        if df.empty:
+            df = new_df
+        else:
+            df = pd.concat([df, new_df], ignore_index=True)
 
-def update_position(symbol, price=None, confidence=None, signal_type=None):
-    df = load_portfolio()
-    symbol = symbol.upper().strip()
-
-    existing = df["symbol"] == symbol
-    if not existing.any():
-        return
-
-    idx = df.index[existing][0]
-
-    if price is not None:
-        df.at[idx, "current_price"] = price
-
-    if confidence is not None:
-        df.at[idx, "confidence"] = confidence
-
-    if signal_type is not None:
-        df.at[idx, "signal_type"] = signal_type
-
-    df.at[idx, "last_updated"] = datetime.now().isoformat(
-        sep=" ", timespec="seconds"
-    )
-
-    save_portfolio(df)
-
-
-def remove_position(symbol):
-    df = load_portfolio()
-    symbol = symbol.upper().strip()
-    df = df[df["symbol"] != symbol]
     save_portfolio(df)
 
 

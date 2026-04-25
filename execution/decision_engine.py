@@ -1,152 +1,84 @@
 import pandas as pd
-from pathlib import Path
-from datetime import datetime
 
-from portfolio.portfolio_manager import load_portfolio
+from execution.wishlist_engine import update_wishlist
 
-# -------------------------------
-# CONFIG
-# -------------------------------
-CONFIDENCE_ADD_THRESHOLD = 15
-CONFIDENCE_EXIT_THRESHOLD = 20
+REQUIRED_COLUMNS = {"stock", "confidence", "system_signal", "avg_price"}
 
-MIN_CONFIDENCE_BUY = 70
-MIN_FINAL_SCORE_BUY = 75
-
-REQUIRED_SIGNAL_COLUMNS = {
-    "stock",
-    "confidence",
-    "system_signal",
-    "avg_price",
-    "final_score",
-}
-
-WISHLIST_FILE = Path("data/state/wishlist.csv")
+# thresholds
+STRONG_THRESHOLD = 80
+SPECULATIVE_THRESHOLD = 65
+EXIT_THRESHOLD = 45
 
 
-# -------------------------------
-# WISHLIST
-# -------------------------------
-def load_wishlist():
-    if not WISHLIST_FILE.exists():
-        return pd.DataFrame(columns=["symbol", "confidence", "signal", "price", "added_at"])
-    return pd.read_csv(WISHLIST_FILE)
-
-
-def save_wishlist(df):
-    WISHLIST_FILE.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(WISHLIST_FILE, index=False)
-
-
-def add_to_wishlist(symbol, confidence, signal, price):
-    df = load_wishlist()
-    symbol = symbol.upper().strip()
-
-    if symbol in df["symbol"].values:
-        return
-
-    new_row = {
-        "symbol": symbol,
-        "confidence": confidence,
-        "signal": signal,
-        "price": price,
-        "added_at": datetime.now().isoformat(timespec="seconds"),
-    }
-
-    new_df = pd.DataFrame([new_row])
-
-    if df.empty:
-        df = new_df
-    else:
-        df = pd.concat([df, new_df], ignore_index=True)
-    save_wishlist(df)
-
-
-# -------------------------------
-# MAIN ENGINE (NO EXECUTION)
-# -------------------------------
 def process_signals(signal_df: pd.DataFrame) -> pd.DataFrame:
     if signal_df.empty:
-        print("[INFO] No signals available.")
         return pd.DataFrame(columns=["symbol", "action", "confidence", "signal"])
 
-    missing = REQUIRED_SIGNAL_COLUMNS.difference(signal_df.columns)
+    missing = REQUIRED_COLUMNS.difference(signal_df.columns)
     if missing:
-        raise ValueError(f"Missing required columns: {', '.join(missing)}")
+        raise ValueError(f"Missing columns: {missing}")
 
-    portfolio = load_portfolio()
     actions = []
+    wishlist_entries = []
 
     for _, row in signal_df.iterrows():
         symbol = str(row["stock"]).strip().upper()
         confidence = float(row["confidence"])
         signal = str(row["system_signal"]).strip().upper()
         price = float(row["avg_price"])
-        final_score = float(row["final_score"])
 
-        existing = portfolio[portfolio["symbol"] == symbol]
+        action = "SKIP"
 
-        # -------------------------------
-        # NOT IN PORTFOLIO → WISHLIST
-        # -------------------------------
-        if existing.empty:
-            if signal in {"ACCUMULATION", "BREAKOUT"}:
-
-                if confidence >= 75:
-                    tier = "STRONG"
-                elif confidence >= 60:
-                    tier = "SPECULATIVE"
-                else:
-                    tier = None
-
-                if tier:
-                    print(f"WISHLIST ({tier}): {symbol}")
-
-                    add_to_wishlist(
-                        symbol=symbol,
-                        confidence=confidence,
-                        signal=f"{signal}_{tier}",
-                        price=price,
-                    )
-
-                    action = f"WISHLIST_{tier}"
-                else:
-                    action = "SKIP"
-            else:
-                action = "SKIP"
-
-        # -------------------------------
-        # IN PORTFOLIO → SUGGESTIONS ONLY
-        # -------------------------------
-        else:
-            old_conf = float(existing.iloc[0]["confidence"])
-
-            # ❌ EXIT SUGGESTION
-            if signal == "IGNORE" or (old_conf - confidence >= CONFIDENCE_EXIT_THRESHOLD):
-                print(f"SUGGEST EXIT: {symbol}")
-                action = "EXIT"
-
-            # ⚠️ WEAK SIGNAL
-            elif confidence < 50:
-                print(f"SUGGEST REDUCE: {symbol}")
-                action = "REDUCE"
-
-            # 🔼 UPGRADE SUGGESTION
-            elif confidence - old_conf >= CONFIDENCE_ADD_THRESHOLD:
+        # --- USER SUGGESTIONS ---
+        if signal in {"ACCUMULATION", "BREAKOUT"}:
+            if confidence >= STRONG_THRESHOLD:
                 print(f"SUGGEST ADD: {symbol}")
                 action = "ADD"
 
-            # 🔄 HOLD
+                # also goes to wishlist
+                wishlist_entries.append({
+                    "symbol": symbol,
+                    "confidence": confidence,
+                    "price": price,
+                    "type": "STRONG",
+                    "signal": signal
+                })
+
+            elif confidence >= SPECULATIVE_THRESHOLD:
+                print(f"WISHLIST (SPECULATIVE): {symbol}")
+                action = "WISHLIST_SPECULATIVE"
+
+                wishlist_entries.append({
+                    "symbol": symbol,
+                    "confidence": confidence,
+                    "price": price,
+                    "type": "SPECULATIVE",
+                    "signal": signal
+                })
+
             else:
                 action = "HOLD"
 
-        actions.append(
-            {
-                "symbol": symbol,
-                "action": action,
-                "confidence": round(confidence, 2),
-                "signal": signal,
-            }
-        )
+        elif signal == "WATCH":
+            if confidence < EXIT_THRESHOLD:
+                print(f"SUGGEST REDUCE: {symbol}")
+                action = "REDUCE"
+            else:
+                action = "HOLD"
+
+        elif signal == "IGNORE":
+            print(f"SUGGEST EXIT: {symbol}")
+            action = "EXIT"
+
+        actions.append({
+            "symbol": symbol,
+            "action": action,
+            "confidence": round(confidence, 2),
+            "signal": signal
+        })
+
+    # update wishlist
+    if wishlist_entries:
+        update_wishlist(wishlist_entries)
 
     return pd.DataFrame(actions)
