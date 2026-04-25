@@ -108,6 +108,9 @@ def run_virtual_trader():
 
     process_settlements(state)
 
+    # -----------------------------
+    # TOTAL EQUITY
+    # -----------------------------
     total_equity = state["cash"] + sum(
         pos["value"] for pos in state["positions"].values()
     )
@@ -123,17 +126,20 @@ def run_virtual_trader():
         target_pct = confidence_to_target(confidence, cfg["max_position_pct"])
         target_value = total_equity * target_pct
 
-        current = state["positions"].get(symbol, {"value": 0})
+        current = state["positions"].get(symbol, {"value": 0, "quantity": 0, "avg_price": price})
         current_value = current["value"]
 
         diff = target_value - current_value
 
         # Minimum threshold check
-        if diff / total_equity < cfg["min_add_pct"]:
+        if abs(diff) / total_equity < cfg["min_add_pct"]:
             continue
 
+        # =============================
+        # BUY
+        # =============================
         if diff > 0:
-            # BUY
+
             if deployable_cash <= 0:
                 continue
 
@@ -143,35 +149,51 @@ def run_virtual_trader():
             state["cash"] -= invest
             deployable_cash -= invest
 
-            new_value = current_value + invest
+            old_qty = current.get("quantity", 0)
+            old_avg = current.get("avg_price", price)
+
+            new_qty = old_qty + qty
+
+            # ✅ CORRECT weighted average
+            new_avg = ((old_qty * old_avg) + (qty * price)) / new_qty
 
             state["positions"][symbol] = {
-                "quantity": current.get("quantity", 0) + qty,
-                "value": new_value,
-                "avg_price": price
+                "quantity": new_qty,
+                "value": new_qty * price,
+                "avg_price": new_avg
             }
 
             state["trade_log"].append({
                 "time": str(datetime.now()),
                 "symbol": symbol,
                 "action": "BUY",
-                "amount": invest
+                "amount": invest,
+                "price": price
             })
 
+        # =============================
+        # SELL
+        # =============================
         elif diff < 0:
-            # SELL
-            sell_value = abs(diff)
 
             pos = state["positions"].get(symbol)
             if not pos:
                 continue
 
-            sell_value = min(sell_value, pos["value"])
+            sell_value = min(abs(diff), pos["value"])
+            qty = sell_value / price
 
-            pos["value"] -= sell_value
+            avg_price = pos.get("avg_price", price)
 
-            if pos["value"] <= 0:
+            # ✅ PnL calculation
+            pnl = (price - avg_price) * qty
+
+            pos["quantity"] -= qty
+
+            if pos["quantity"] <= 0:
                 del state["positions"][symbol]
+            else:
+                pos["value"] = pos["quantity"] * price
 
             # T+3 settlement
             state["pending_settlements"].append({
@@ -183,7 +205,9 @@ def run_virtual_trader():
                 "time": str(datetime.now()),
                 "symbol": symbol,
                 "action": "SELL",
-                "amount": sell_value
+                "amount": sell_value,
+                "price": price,
+                "pnl": pnl
             })
 
     save_state(state)

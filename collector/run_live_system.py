@@ -2,6 +2,7 @@ import time
 
 from collector.collector import fetch_data
 from execution.virtual_trader import run_virtual_trader
+from execution.performance_tracker import update_performance
 import json
 
 
@@ -20,6 +21,7 @@ def run():
 
             fetch_data()
             run_virtual_trader()
+            update_performance()
 
             print("--- CYCLE END ---")
 
