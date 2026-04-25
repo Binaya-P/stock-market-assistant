@@ -1,0 +1,19 @@
+{
+  "virtual_trader": 
+  {
+    "enabled": true,
+    "initial_capital": 500000,
+    "cash_reserve_pct": 0.05,
+    "max_position_pct": 0.20,
+    "min_add_pct": 0.02
+  },
+  "market": 
+  {
+    "start_hour": 10,
+    "end_hour": 15
+  },
+  "scheduler": 
+  {
+    "interval_minutes": 60
+  }
+}
