@@ -25,7 +25,8 @@ def load_perf():
             "trade_count": 0,
             "wins": 0,
             "losses": 0,
-            "equity_curve": []
+            "equity_curve": [],
+            "last_snapshot_time": None
         }
     with open(PERF_FILE, "r") as f:
         return json.load(f)
@@ -41,14 +42,17 @@ def save_perf(perf):
 # CORE METRICS
 # -----------------------------
 def calculate_unrealized(state):
-    total = 0
-    for pos in state["positions"].values():
-        total += pos["value"]
-    return total
+    return sum(pos.get("value", 0) for pos in state.get("positions", {}).values())
 
 
 def calculate_equity(state):
-    return state["cash"] + calculate_unrealized(state)
+    return state.get("cash", 0) + calculate_unrealized(state)
+
+
+def calculate_return_pct(equity, initial_capital):
+    if initial_capital == 0:
+        return 0
+    return round(((equity - initial_capital) / initial_capital) * 100, 2)
 
 
 # -----------------------------
@@ -61,7 +65,7 @@ def update_trade_stats(perf, state):
         if trade.get("processed"):
             continue
 
-        if trade["action"] == "SELL":
+        if trade.get("action") == "SELL":
             pnl = trade.get("pnl", 0)
 
             perf["trade_count"] += 1
@@ -76,6 +80,21 @@ def update_trade_stats(perf, state):
 
 
 # -----------------------------
+# SNAPSHOT CONTROL
+# -----------------------------
+def should_take_snapshot(perf):
+    now = datetime.now()
+
+    if perf.get("last_snapshot_time") is None:
+        return True
+
+    last = datetime.fromisoformat(perf["last_snapshot_time"])
+
+    # prevent duplicate within same minute
+    return (now - last).seconds >= 60
+
+
+# -----------------------------
 # MAIN ENTRY
 # -----------------------------
 def update_performance():
@@ -86,21 +105,31 @@ def update_performance():
 
     perf = load_perf()
 
-    # update trades
+    # update trade stats
     update_trade_stats(perf, state)
 
-    # equity snapshot
     equity = calculate_equity(state)
+    return_pct = calculate_return_pct(equity, perf["initial_capital"])
 
-    perf["equity_curve"].append({
-        "time": str(datetime.now()),
-        "equity": equity
-    })
+    # snapshot control
+    if should_take_snapshot(perf):
+        perf["equity_curve"].append({
+            "time": str(datetime.now()),
+            "equity": equity,
+            "return_pct": return_pct
+        })
+        perf["last_snapshot_time"] = str(datetime.now())
+
+    # derived metrics
+    total_trades = perf["trade_count"]
+    wins = perf["wins"]
+
+    perf["win_rate"] = round((wins / total_trades) * 100, 2) if total_trades > 0 else 0
 
     save_perf(perf)
 
-    # persist updated trade log flags
+    # persist updated trade flags
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
-    print("Performance updated.")
+    print("Virtual performance updated.")
