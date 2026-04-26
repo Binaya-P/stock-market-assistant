@@ -14,4 +14,4 @@ loguru==0.7.2
 tqdm==4.66.4
 
 #Nepse API we are using
-git+https://github.com/basic-bgnr/NepseUnofficialApi
+nepse @ git+https://github.com/basic-bgnr/NepseUnofficialApi@2f09fbfdcbaf23545d5755b6f11b367324d5b8a4
